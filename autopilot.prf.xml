@@ -1057,7 +1057,7 @@ Only available if you select &amp;lt;b&amp;gt;Continue Task After Error&amp;lt;/
 			</Bundle>
 			<Str sr="arg1" ve="3">com.joaomgcd.autonotification</Str>
 			<Str sr="arg2" ve="3">com.joaomgcd.autonotification.activity.ActivityConfigNotificationInterceptReply</Str>
-			<Int sr="arg3" val="10"/>
+			<Int sr="arg3" val="45"/>
 			<Int sr="arg4" val="1"/>
 		</Action>
 
