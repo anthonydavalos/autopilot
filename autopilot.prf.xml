@@ -272,9 +272,9 @@ When
 		</Action>
 		<Action sr="act1" ve="7">
 			<code>547</code>
-			<label>Set resp_key para contexto</label>
-			<Str sr="arg0" ve="3">%resp_key</Str>
-			<Str sr="arg1" ve="3">Resp_%session_id</Str>
+			<label>Preservar session_id como global</label>
+			<Str sr="arg0" ve="3">%GLOBAL_SESSION_ID</Str>
+			<Str sr="arg1" ve="3">%session_id</Str>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
@@ -282,6 +282,17 @@ When
 			<Int sr="arg6" val="0"/>
 		</Action>
 		<Action sr="act2" ve="7">
+			<code>547</code>
+			<label>Set resp_key para contexto</label>
+			<Str sr="arg0" ve="3">%resp_key</Str>
+			<Str sr="arg1" ve="3">PrevResp_%session_id</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act3" ve="7">
 			<code>547</code>
 			<label>Set user_message</label>
 			<Str sr="arg0" ve="3">%user_message</Str>
@@ -292,7 +303,7 @@ When
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act3" ve="7">
+		<Action sr="act4" ve="7">
 			<code>129</code>
 			<label>DEBOUNCE + LEADER ELECTION (v3 - Atomic)</label>
 			<se>false</se>
@@ -301,7 +312,7 @@ When
 	if (!sid || sid === 'undefined') {
 		var respKeyProbe = local('resp_key') || global('resp_key') || '';
 		if (respKeyProbe) {
-			var matchSid = respKeyProbe.match(/^Resp_(.+)$/);
+			var matchSid = respKeyProbe.match(/^PrevResp_(.+)$/);
 			if (matchSid &amp;&amp; matchSid[1]) {
 				sid = matchSid[1];
 			}
@@ -332,6 +343,7 @@ if (buffer) {
 	buffer = newMessage;
 }
 setGlobal('Buf_' + sid, buffer);
+
 setLocal('buf_var', 'Buf_' + sid);
 
 setLocal('arrival_number', '' + currentInFlight);
@@ -355,7 +367,7 @@ if (sid) {
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="45"/>
 		</Action>
-		<Action sr="act4" ve="7">
+		<Action sr="act5" ve="7">
 			<code>30</code>
 			<label>Wait: ventana debounce</label>
 			<Int sr="arg0" val="0"/>
@@ -366,7 +378,7 @@ if (sid) {
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
 		</Action>
-		<Action sr="act5" ve="7">
+		<Action sr="act6" ve="7">
 			<code>129</code>
 			<label>JS: Verificar liderazgo y armar payload</label>
 			<Str sr="arg0" ve="3">var sid = global('session_id') || local('session_id') || '';
@@ -374,7 +386,7 @@ if (sid) {
 	if (!sid || sid === 'undefined') {
 		var respKeyProbe = local('resp_key') || global('resp_key') || '';
 		if (respKeyProbe) {
-			var matchSid = respKeyProbe.match(/^Resp_(.+)$/);
+			var matchSid = respKeyProbe.match(/^PrevResp_(.+)$/);
 			if (matchSid &amp;&amp; matchSid[1]) {
 				sid = matchSid[1];
 			}
@@ -398,6 +410,7 @@ var finalInFlight = parseInt(finalInFlightRaw, 10);
 if (isNaN(finalInFlight)) { finalInFlight = arrivalNumber; }
 
 var finalBufferContent = sid ? (global('Buf_' + sid) || '') : '';
+
 var shouldSendFlag = false;
 if (finalBufferContent) {
 	if (finalInFlight &lt;= 1) {
@@ -465,12 +478,22 @@ setGlobal(gateKey, shouldSendToken);
 if (sid) {
 	setGlobal('ShouldSend_' + sid, shouldSendToken);
 	setGlobal('LeaderDiag_' + sid, leaderDiag);
+}
+
+// PRESERVAR MENSAJES PARA LOGGING (todos los mensajes, líder y seguidores)
+var senderForLog = sid ? (global('Sender_' + sid) || '') : '';
+if (!senderForLog) {
+	senderForLog = local('antitle') || global('antitle') || '';
+}
+if (finalBufferContent && sid) {
+	setGlobal('PRESERVED_MESSAGES_' + sid, finalBufferContent);
+	setGlobal('PRESERVED_SENDER_' + sid, senderForLog);
 }</Str>
 			<Str sr="arg1" ve="3"/>
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="45"/>
 		</Action>
-		<Action sr="act6" ve="7">
+		<Action sr="act7" ve="7">
 			<code>547</code>
 			<label>Sync: Copy TEMP globals to locals</label>
 			<Str sr="arg0" ve="3">%should_send_token</Str>
@@ -481,7 +504,7 @@ if (sid) {
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act7" ve="7">
+		<Action sr="act8" ve="7">
 			<code>547</code>
 			<label>Sync: Copy http_body from TEMP</label>
 			<Str sr="arg0" ve="3">%http_body</Str>
@@ -493,7 +516,7 @@ if (sid) {
 			<Int sr="arg6" val="0"/>
 		</Action>
 
-		<Action sr="act8" ve="7">
+		<Action sr="act9" ve="7">
 			<code>37</code>
 			<label>GATE: Continuar solo si soy líder (should_send_token = send)</label>
 			<ConditionList sr="if">
@@ -504,21 +527,21 @@ if (sid) {
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act9" ve="7">
+		<Action sr="act10" ve="7">
 			<code>43</code>
 			<label>ELSE (No soy líder)</label>
 		</Action>
-		<Action sr="act10" ve="7">
+		<Action sr="act11" ve="7">
 			<code>137</code>
 			<label>STOP</label>
 			<Int sr="arg0" val="0"/>
 			<Str sr="arg1" ve="3"/>
 		</Action>
-		<Action sr="act11" ve="7">
+		<Action sr="act12" ve="7">
 			<code>38</code>
 			<label>End If (GATE)</label>
 		</Action>
-		<Action sr="act12" ve="7">
+		<Action sr="act13" ve="7">
 			<code>339</code>
 			<label>HTTP POST a OpenAI Responses API</label>
 			<se>false</se>
@@ -555,7 +578,51 @@ Connection: close</Str>
 			<Int sr="arg8" val="45"/>
 			<Int sr="arg9" val="0"/>
 		</Action>
-		<Action sr="act13" ve="7">
+		<Action sr="act14" ve="7">
+			<code>129</code>
+			<label>JS: Usar mensajes preservados de act5 (global SID)</label>
+			<Str sr="arg0" ve="3">try {
+  var sid = global('GLOBAL_SESSION_ID') || global('session_id') || local('session_id') || '';
+  var bufferContent = '';
+  var sender = '';
+  
+  if (sid) {
+    // Usar variables preservadas de act5
+    bufferContent = global('PRESERVED_MESSAGES_' + sid) || '';
+    sender = global('PRESERVED_SENDER_' + sid) || '';
+  }
+  
+  // Fallbacks
+  if (!bufferContent) {
+    bufferContent = local('user_message') || global('user_message') || 'mensaje no disponible';
+  }
+  if (!sender) {
+    sender = local('antitle') || global('antitle') || 'Usuario';
+  }
+  
+  // Preservar para logging final
+  setGlobal('FINAL_PRESERVED_MESSAGES', bufferContent);
+  setGlobal('FINAL_PRESERVED_SENDER', sender);
+  
+} catch(e) {
+  setGlobal('FINAL_PRESERVED_MESSAGES', 'Error al cargar mensajes');
+  setGlobal('FINAL_PRESERVED_SENDER', 'Usuario');
+}
+'';</Str>
+			<Str sr="arg1" ve="3"/>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="45"/>
+		</Action>
+		<Action sr="act15" ve="7">
+			<code>30</code>
+			<label>Wait: Permitir que seguidores despierten antes de limpiar</label>
+			<Int sr="arg0" val="4000"/>
+			<Int sr="arg1" val="0"/>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+		</Action>
+		<Action sr="act16" ve="7">
 			<code>129</code>
 			<label>JS: Limpieza de semáforos post-HTTP</label>
 			<se>false</se>
@@ -565,7 +632,7 @@ Connection: close</Str>
 	if (!sid || sid === 'undefined') {
 		var respKeyProbe = local('resp_key') || global('resp_key') || '';
 		if (respKeyProbe) {
-			var matchSid = respKeyProbe.match(/^Resp_(.+)$/);
+			var matchSid = respKeyProbe.match(/^PrevResp_(.+)$/);
 			if (matchSid &amp;&amp; matchSid[1]) {
 				sid = matchSid[1];
 			}
@@ -588,6 +655,9 @@ Connection: close</Str>
 			setGlobal('HttpBody_' + sid, '');
 			setGlobal('HttpBodyLen_' + sid, '0');
 			setGlobal('Sender_' + sid, '');
+			setGlobal('LeaderDiag_' + sid, '');
+			setGlobal('PRESERVED_MESSAGES_' + sid, '');
+			setGlobal('PRESERVED_SENDER_' + sid, '');
 		}
 		if (gateKey) {
 			setGlobal(gateKey, '');
@@ -603,7 +673,7 @@ Connection: close</Str>
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="3"/>
 		</Action>
-		<Action sr="act14" ve="7">
+		<Action sr="act17" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%http_error</Str>
 			<Str sr="arg1" ve="3">0</Str>
@@ -614,7 +684,7 @@ Connection: close</Str>
 			<Int sr="arg6" val="0"/>
 		</Action>
 
-		<Action sr="act15" ve="7">
+		<Action sr="act18" ve="7">
 			<code>547</code>
 			<label>PlanB: Guardar %%resp_key = %http_data[id]</label>
 			<Str sr="arg0" ve="3">%%resp_key</Str>
@@ -632,7 +702,7 @@ Connection: close</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act16" ve="7">
+		<Action sr="act19" ve="7">
 			<code>547</code>
 			<label>PlanB: alt_ctx_key = PrevResp_%session_id</label>
 			<Str sr="arg0" ve="3">%alt_ctx_key</Str>
@@ -643,7 +713,7 @@ Connection: close</Str>
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act17" ve="7">
+		<Action sr="act20" ve="7">
 			<code>547</code>
 			<label>PlanB: Guardar %%alt_ctx_key = %http_data[id]</label>
 			<Str sr="arg0" ve="3">%%alt_ctx_key</Str>
@@ -661,8 +731,7 @@ Connection: close</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-
-		<Action sr="act18" ve="7">
+		<Action sr="act21" ve="7">
 			<code>37</code>
 			<label>Verificar si HTTP falló (código no-2xx O err existe)</label>
 			<ConditionList sr="if">
@@ -679,7 +748,7 @@ Connection: close</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act19" ve="7">
+		<Action sr="act22" ve="7">
 			<code>547</code>
 			<label>Marcar error solo si código HTTP no es 2xx</label>
 			<Str sr="arg0" ve="3">%http_error</Str>
@@ -690,10 +759,10 @@ Connection: close</Str>
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act20" ve="7">
+		<Action sr="act23" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act21" ve="7">
+		<Action sr="act24" ve="7">
 			<code>37</code>
 			<ConditionList sr="if">
 				<Condition sr="c0" ve="3">
@@ -703,7 +772,7 @@ Connection: close</Str>
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act22" ve="7">
+		<Action sr="act25" ve="7">
 			<code>523</code>
 			<Str sr="arg0" ve="3">Tasker Error</Str>
 			<Str sr="arg1" ve="3">%errmsg
@@ -726,10 +795,10 @@ HTTP %http_response_code
 			<Int sr="arg8" val="0"/>
 			<Str sr="arg9" ve="3"/>
 		</Action>
-		<Action sr="act23" ve="7">
+		<Action sr="act26" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act24" ve="7">
+		<Action sr="act27" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%api_reply</Str>
 			<Str sr="arg1" ve="3">%http_data[output.content.text]</Str>
@@ -739,7 +808,7 @@ HTTP %http_response_code
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act25" ve="7">
+		<Action sr="act28" ve="7">
 			<code>37</code>
 			<ConditionList sr="if">
 				<bool0>Or</bool0>
@@ -755,7 +824,7 @@ HTTP %http_response_code
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act26" ve="7">
+		<Action sr="act29" ve="7">
 			<code>129</code>
 			<label>JS: Parseo JSON fallback</label>
 			<se>true</se>
@@ -805,7 +874,7 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="3"/>
 		</Action>
-		<Action sr="act27" ve="7">
+		<Action sr="act30" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%response_id</Str>
 			<Str sr="arg1" ve="3">%http_data[id]</Str>
@@ -822,7 +891,7 @@ if (typeof setGlobal==='function') {
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act28" ve="7">
+		<Action sr="act31" ve="7">
 			<code>37</code>
 			<label>IF: response_id válido (resp_...)</label>
 			<ConditionList sr="if">
@@ -833,7 +902,7 @@ if (typeof setGlobal==='function') {
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act29" ve="7">
+		<Action sr="act32" ve="7">
 			<code>547</code>
 			<label>Guardar contexto por contacto: %%resp_key = %response_id</label>
 			<Str sr="arg0" ve="3">%%resp_key</Str>
@@ -844,10 +913,10 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act30" ve="7">
+		<Action sr="act33" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act31" ve="7">
+		<Action sr="act34" ve="7">
 			<code>547</code>
 			<label>Alt ctx key: construir nombre PrevResp_%session_id</label>
 			<Str sr="arg0" ve="3">%alt_ctx_key</Str>
@@ -858,7 +927,7 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act32" ve="7">
+		<Action sr="act35" ve="7">
 			<code>547</code>
 			<label>Alt ctx save: %%alt_ctx_key = %response_id</label>
 			<Str sr="arg0" ve="3">%%alt_ctx_key</Str>
@@ -869,30 +938,42 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-
-		<Action sr="act33" ve="7">
-			<code>129</code>
-			<label>JS: Persistir response_id en clave Resp_ por contacto</label>
-			<se>false</se>
-			<Str sr="arg0" ve="3">try {
-  var rk='';
-  try { rk = local('resp_key'); } catch(e) {}
-  if (!rk) { try { rk = global('resp_key'); } catch(e) {} }
-  var rid='';
-  try { rid = local('response_id'); } catch(e) {}
-  if (!rid) { try { rid = global('response_id'); } catch(e) {} }
-  if (rk &amp;&amp; rid &amp;&amp; (''+rid).indexOf('resp_')===0) {
-    try { setGlobal(rk, rid); } catch(e) {}
-  }
-} catch(e) {}</Str>
-			<Str sr="arg1" ve="3"/>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="3"/>
+		<Action sr="act36" ve="7">
+			<code>37</code>
+			<label>Check if response_id valid for persistence</label>
+			<ConditionList sr="if">
+				<bool0>And</bool0>
+				<Condition sr="c0" ve="3">
+					<lhs>%resp_key</lhs>
+					<op>12</op>
+					<rhs></rhs>
+				</Condition>
+				<Condition sr="c1" ve="3">
+					<lhs>%response_id</lhs>
+					<op>2</op>
+					<rhs>resp_*</rhs>
+				</Condition>
+			</ConditionList>
 		</Action>
-		<Action sr="act34" ve="7">
+		<Action sr="act37" ve="7">
+			<code>547</code>
+			<label>Persist response_id in PrevResp_%session_id</label>
+			<Str sr="arg0" ve="3">%%resp_key</Str>
+			<Str sr="arg1" ve="3">%response_id</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act38" ve="7">
+			<code>38</code>
+			<label>End persistence check</label>
+		</Action>
+		<Action sr="act39" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act35" ve="7">
+		<Action sr="act40" ve="7">
 			<code>37</code>
 			<ConditionList sr="if">
 				<bool0>Or</bool0>
@@ -908,7 +989,7 @@ if (typeof setGlobal==='function') {
 				</Condition>
 			</ConditionList>
 		</Action>
-		<Action sr="act36" ve="7">
+		<Action sr="act41" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%api_reply</Str>
 			<Str sr="arg1" ve="3">Disculpe, hubo un error al procesar la respuesta. Intentaré contestarle en breve.</Str>
@@ -918,31 +999,21 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg5" val="3"/>
 			<Int sr="arg6" val="0"/>
 		</Action>
-		<Action sr="act37" ve="7">
+		<Action sr="act42" ve="7">
 			<code>38</code>
 		</Action>
-		<Action sr="act38" ve="7">
-			<code>129</code>
-			<label>JS: Calcular api_reply_len_strict</label>
-			<Str sr="arg0" ve="3">try {
-  var t='';
-  try { t = local('api_reply'); } catch(e) {}
-  if (!t) { try { t = global('api_reply'); } catch(e2) {} }
-  if (t==null) t='';
-  var n = (''+t).length;
-  setLocal('api_reply_len_strict',''+n);
-  setGlobal('api_reply_len_strict',''+n);
-} catch(err) {
-  setLocal('api_reply_len_strict','0');
-  setGlobal('api_reply_len_strict','0');
-}
-'';</Str>
-			<Str sr="arg1" ve="3"/>
-			<Int sr="arg2" val="1"/>
-			<Int sr="arg3" val="45"/>
+		<Action sr="act43" ve="7">
+			<code>547</code>
+			<label>Calculate api_reply_len_strict</label>
+			<Str sr="arg0" ve="3">%api_reply_len_strict</Str>
+			<Str sr="arg1" ve="3">#%api_reply</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
 		</Action>
-
-		<Action sr="act39" ve="7">
+		<Action sr="act44" ve="7">
 			<code>30</code>
 			<label>Wait: breve antes de Reply (200ms)</label>
 			<Int sr="arg0" val="200"/>
@@ -951,7 +1022,7 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
 		</Action>
-		<Action sr="act40" ve="7">
+		<Action sr="act45" ve="7">
 			<code>129</code>
 			<label>JS: Formatear error de red amigable</label>
 			<Str sr="arg0" ve="3">try {
@@ -961,7 +1032,7 @@ if (typeof setGlobal==='function') {
   if (!reply) reply = '';
   
   // Detectar errores de red comunes
-  var isNetworkError = (
+var isNetworkError = (
     reply.indexOf('UnknownHostException') &gt;= 0 ||
     reply.indexOf('ConnectException') &gt;= 0 ||
     reply.indexOf('SocketTimeoutException') &gt;= 0 ||
@@ -983,7 +1054,7 @@ if (typeof setGlobal==='function') {
 			<Int sr="arg2" val="1"/>
 			<Int sr="arg3" val="45"/>
 		</Action>
-		<Action sr="act41" ve="7">
+		<Action sr="act46" ve="7">
 			<code>1644316156</code>
 			<Bundle sr="arg0">
 				<Vals sr="val">
@@ -1060,6 +1131,331 @@ Only available if you select &amp;lt;b&amp;gt;Continue Task After Error&amp;lt;/
 			<Int sr="arg3" val="45"/>
 			<Int sr="arg4" val="1"/>
 		</Action>
+		<Action sr="act47" ve="7">
+			<code>410</code>
+			<label>Write File: Log conversación</label>
+			<Str sr="arg0" ve="3">Tasker/log/wa.txt</Str>
+			<Str sr="arg1" ve="3">[%DAYW %DATE %TIME]
+👤 %FINAL_PRESERVED_SENDER:
+%FINAL_PRESERVED_MESSAGES
+🤖 Bixby:
+%api_reply
 
+</Str>
+			<Int sr="arg2" val="1"/>
+			<Int sr="arg3" val="1"/>
+		</Action>
+		<Action sr="act48" ve="7">
+			<code>547</code>
+			<label>Set notif_sender variable</label>
+			<Str sr="arg0" ve="3">%notif_sender</Str>
+			<Str sr="arg1" ve="3">%FINAL_PRESERVED_SENDER</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act49" ve="7">
+			<code>547</code>
+			<label>Set notif_messages variable</label>
+			<Str sr="arg0" ve="3">%notif_messages</Str>
+			<Str sr="arg1" ve="3">%FINAL_PRESERVED_MESSAGES</Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act50" ve="7">
+			<code>547</code>
+			<label>Clear FINAL_PRESERVED_MESSAGES</label>
+			<Str sr="arg0" ve="3">%FINAL_PRESERVED_MESSAGES</Str>
+			<Str sr="arg1" ve="3"></Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act51" ve="7">
+			<code>547</code>
+			<label>Clear FINAL_PRESERVED_SENDER</label>
+			<Str sr="arg0" ve="3">%FINAL_PRESERVED_SENDER</Str>
+			<Str sr="arg1" ve="3"></Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act52" ve="7">
+			<code>547</code>
+			<label>Clear GLOBAL_SESSION_ID</label>
+			<Str sr="arg0" ve="3">%GLOBAL_SESSION_ID</Str>
+			<Str sr="arg1" ve="3"></Str>
+			<Int sr="arg2" val="0"/>
+			<Int sr="arg3" val="0"/>
+			<Int sr="arg4" val="0"/>
+			<Int sr="arg5" val="3"/>
+			<Int sr="arg6" val="0"/>
+		</Action>
+		<Action sr="act53" ve="7">
+			<code>166160670</code>
+			<Bundle sr="arg0">
+				<Vals sr="val">
+					<ActionIconString1>&lt;null&gt;</ActionIconString1>
+					<ActionIconString1-type>java.lang.String</ActionIconString1-type>
+					<ActionIconString2>&lt;null&gt;</ActionIconString2>
+					<ActionIconString2-type>java.lang.String</ActionIconString2-type>
+					<ActionIconString3>&lt;null&gt;</ActionIconString3>
+					<ActionIconString3-type>java.lang.String</ActionIconString3-type>
+					<ActionIconString4>&lt;null&gt;</ActionIconString4>
+					<ActionIconString4-type>java.lang.String</ActionIconString4-type>
+					<ActionIconString5>&lt;null&gt;</ActionIconString5>
+					<ActionIconString5-type>java.lang.String</ActionIconString5-type>
+					<AppendTexts>false</AppendTexts>
+					<AppendTexts-type>java.lang.Boolean</AppendTexts-type>
+					<BackgroundColor>&lt;null&gt;</BackgroundColor>
+					<BackgroundColor-type>java.lang.String</BackgroundColor-type>
+					<BadgeType>&lt;null&gt;</BadgeType>
+					<BadgeType-type>java.lang.String</BadgeType-type>
+					<Button1UnlockScreen>false</Button1UnlockScreen>
+					<Button1UnlockScreen-type>java.lang.Boolean</Button1UnlockScreen-type>
+					<Button2UnlockScreen>false</Button2UnlockScreen>
+					<Button2UnlockScreen-type>java.lang.Boolean</Button2UnlockScreen-type>
+					<Button3UnlockScreen>false</Button3UnlockScreen>
+					<Button3UnlockScreen-type>java.lang.Boolean</Button3UnlockScreen-type>
+					<Button4UnlockScreen>false</Button4UnlockScreen>
+					<Button4UnlockScreen-type>java.lang.Boolean</Button4UnlockScreen-type>
+					<Button5UnlockScreen>false</Button5UnlockScreen>
+					<Button5UnlockScreen-type>java.lang.Boolean</Button5UnlockScreen-type>
+					<ChronometerCountDown>false</ChronometerCountDown>
+					<ChronometerCountDown-type>java.lang.Boolean</ChronometerCountDown-type>
+					<Colorize>false</Colorize>
+					<Colorize-type>java.lang.Boolean</Colorize-type>
+					<DismissOnTouchVariable>&lt;null&gt;</DismissOnTouchVariable>
+					<DismissOnTouchVariable-type>java.lang.String</DismissOnTouchVariable-type>
+					<ExtraInfo>&lt;null&gt;</ExtraInfo>
+					<ExtraInfo-type>java.lang.String</ExtraInfo-type>
+					<GroupAlertBehaviour>&lt;null&gt;</GroupAlertBehaviour>
+					<GroupAlertBehaviour-type>java.lang.String</GroupAlertBehaviour-type>
+					<GroupKey>&lt;null&gt;</GroupKey>
+					<GroupKey-type>java.lang.String</GroupKey-type>
+					<IconExpanded>&lt;null&gt;</IconExpanded>
+					<IconExpanded-type>java.lang.String</IconExpanded-type>
+					<IsGroupSummary>false</IsGroupSummary>
+					<IsGroupSummary-type>java.lang.Boolean</IsGroupSummary-type>
+					<IsGroupVariable>&lt;null&gt;</IsGroupVariable>
+					<IsGroupVariable-type>java.lang.String</IsGroupVariable-type>
+					<MediaAlbum>&lt;null&gt;</MediaAlbum>
+					<MediaAlbum-type>java.lang.String</MediaAlbum-type>
+					<MediaArtist>&lt;null&gt;</MediaArtist>
+					<MediaArtist-type>java.lang.String</MediaArtist-type>
+					<MediaDuration>&lt;null&gt;</MediaDuration>
+					<MediaDuration-type>java.lang.String</MediaDuration-type>
+					<MediaIcon>&lt;null&gt;</MediaIcon>
+					<MediaIcon-type>java.lang.String</MediaIcon-type>
+					<MediaLayout>false</MediaLayout>
+					<MediaLayout-type>java.lang.Boolean</MediaLayout-type>
+					<MediaNextCommand>&lt;null&gt;</MediaNextCommand>
+					<MediaNextCommand-type>java.lang.String</MediaNextCommand-type>
+					<MediaPauseCommand>&lt;null&gt;</MediaPauseCommand>
+					<MediaPauseCommand-type>java.lang.String</MediaPauseCommand-type>
+					<MediaPlayCommand>&lt;null&gt;</MediaPlayCommand>
+					<MediaPlayCommand-type>java.lang.String</MediaPlayCommand-type>
+					<MediaPlaybackState>&lt;null&gt;</MediaPlaybackState>
+					<MediaPlaybackState-type>java.lang.String</MediaPlaybackState-type>
+					<MediaPosition>&lt;null&gt;</MediaPosition>
+					<MediaPosition-type>java.lang.String</MediaPosition-type>
+					<MediaPreviousCommand>&lt;null&gt;</MediaPreviousCommand>
+					<MediaPreviousCommand-type>java.lang.String</MediaPreviousCommand-type>
+					<MediaTrack>&lt;null&gt;</MediaTrack>
+					<MediaTrack-type>java.lang.String</MediaTrack-type>
+					<MessagingImages>&lt;null&gt;</MessagingImages>
+					<MessagingImages-type>java.lang.String</MessagingImages-type>
+					<MessagingOwnIcon>&lt;null&gt;</MessagingOwnIcon>
+					<MessagingOwnIcon-type>java.lang.String</MessagingOwnIcon-type>
+					<MessagingOwnName>&lt;null&gt;</MessagingOwnName>
+					<MessagingOwnName-type>java.lang.String</MessagingOwnName-type>
+					<MessagingPersonBot>&lt;null&gt;</MessagingPersonBot>
+					<MessagingPersonBot-type>java.lang.String</MessagingPersonBot-type>
+					<MessagingPersonIcons>&lt;null&gt;</MessagingPersonIcons>
+					<MessagingPersonIcons-type>java.lang.String</MessagingPersonIcons-type>
+					<MessagingPersonImportant>&lt;null&gt;</MessagingPersonImportant>
+					<MessagingPersonImportant-type>java.lang.String</MessagingPersonImportant-type>
+					<MessagingPersonNames>&lt;null&gt;</MessagingPersonNames>
+					<MessagingPersonNames-type>java.lang.String</MessagingPersonNames-type>
+					<MessagingPersonUri>&lt;null&gt;</MessagingPersonUri>
+					<MessagingPersonUri-type>java.lang.String</MessagingPersonUri-type>
+					<MessagingSeparator>&lt;null&gt;</MessagingSeparator>
+					<MessagingSeparator-type>java.lang.String</MessagingSeparator-type>
+					<MessagingTexts>&lt;null&gt;</MessagingTexts>
+					<MessagingTexts-type>java.lang.String</MessagingTexts-type>
+					<NotificationChannelBypassDnd>false</NotificationChannelBypassDnd>
+					<NotificationChannelBypassDnd-type>java.lang.Boolean</NotificationChannelBypassDnd-type>
+					<NotificationChannelDescription>&lt;null&gt;</NotificationChannelDescription>
+					<NotificationChannelDescription-type>java.lang.String</NotificationChannelDescription-type>
+					<NotificationChannelId>Default Notifications</NotificationChannelId>
+					<NotificationChannelId-type>java.lang.String</NotificationChannelId-type>
+					<NotificationChannelImportance>5</NotificationChannelImportance>
+					<NotificationChannelImportance-type>java.lang.String</NotificationChannelImportance-type>
+					<NotificationChannelName>&lt;null&gt;</NotificationChannelName>
+					<NotificationChannelName-type>java.lang.String</NotificationChannelName-type>
+					<NotificationChannelShowBadge>false</NotificationChannelShowBadge>
+					<NotificationChannelShowBadge-type>java.lang.Boolean</NotificationChannelShowBadge-type>
+					<PersistentVariable>&lt;null&gt;</PersistentVariable>
+					<PersistentVariable-type>java.lang.String</PersistentVariable-type>
+					<PhoneOnly>false</PhoneOnly>
+					<PhoneOnly-type>java.lang.Boolean</PhoneOnly-type>
+					<PriorityVariable>&lt;null&gt;</PriorityVariable>
+					<PriorityVariable-type>java.lang.String</PriorityVariable-type>
+					<PublicVersion>&lt;null&gt;</PublicVersion>
+					<PublicVersion-type>java.lang.String</PublicVersion-type>
+					<ReplyAction>&lt;null&gt;</ReplyAction>
+					<ReplyAction-type>java.lang.String</ReplyAction-type>
+					<ReplyChoices>&lt;null&gt;</ReplyChoices>
+					<ReplyChoices-type>java.lang.String</ReplyChoices-type>
+					<ReplyLabel>&lt;null&gt;</ReplyLabel>
+					<ReplyLabel-type>java.lang.String</ReplyLabel-type>
+					<ShareButtonsVariable>&lt;null&gt;</ShareButtonsVariable>
+					<ShareButtonsVariable-type>java.lang.String</ShareButtonsVariable-type>
+					<SkipPictureCache>false</SkipPictureCache>
+					<SkipPictureCache-type>java.lang.Boolean</SkipPictureCache-type>
+					<SoundPath>&lt;null&gt;</SoundPath>
+					<SoundPath-type>java.lang.String</SoundPath-type>
+					<StatusBarIconString>&lt;null&gt;</StatusBarIconString>
+					<StatusBarIconString-type>java.lang.String</StatusBarIconString-type>
+					<StatusBarTextSize>16</StatusBarTextSize>
+					<StatusBarTextSize-type>java.lang.String</StatusBarTextSize-type>
+					<TextExpanded>👤 %notif_messages
+🤖 %api_reply</TextExpanded>
+					<TextExpanded-type>java.lang.String</TextExpanded-type>
+					<Time>&lt;null&gt;</Time>
+					<Time-type>java.lang.String</Time-type>
+					<TimeFormat>&lt;null&gt;</TimeFormat>
+					<TimeFormat-type>java.lang.String</TimeFormat-type>
+					<Timeout>&lt;null&gt;</Timeout>
+					<Timeout-type>java.lang.String</Timeout-type>
+					<TitleExpanded>&lt;null&gt;</TitleExpanded>
+					<TitleExpanded-type>java.lang.String</TitleExpanded-type>
+					<UpdateNotification>false</UpdateNotification>
+					<UpdateNotification-type>java.lang.Boolean</UpdateNotification-type>
+					<UseChronometer>false</UseChronometer>
+					<UseChronometer-type>java.lang.Boolean</UseChronometer-type>
+					<UseHTML>false</UseHTML>
+					<UseHTML-type>java.lang.Boolean</UseHTML-type>
+					<Visibility>&lt;null&gt;</Visibility>
+					<Visibility-type>java.lang.String</Visibility-type>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Title: %notif_sender
+Text: %notif_messages
+Status Bar Icon: reply
+Status Bar Text Size: 16
+Priority: 2
+Text Expanded: 👤 %notif_messages
+🤖 %api_reply
+Category Id: Default Notifications
+Category Importance: Max
+Separator: ,</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
+					<config_action_1_icon>&lt;null&gt;</config_action_1_icon>
+					<config_action_1_icon-type>java.lang.String</config_action_1_icon-type>
+					<config_action_2_icon>&lt;null&gt;</config_action_2_icon>
+					<config_action_2_icon-type>java.lang.String</config_action_2_icon-type>
+					<config_action_3_icon>&lt;null&gt;</config_action_3_icon>
+					<config_action_3_icon-type>java.lang.String</config_action_3_icon-type>
+					<config_action_4_icon>&lt;null&gt;</config_action_4_icon>
+					<config_action_4_icon-type>java.lang.String</config_action_4_icon-type>
+					<config_action_5_icon>&lt;null&gt;</config_action_5_icon>
+					<config_action_5_icon-type>java.lang.String</config_action_5_icon-type>
+					<config_notification_action>&lt;null&gt;</config_notification_action>
+					<config_notification_action-type>java.lang.String</config_notification_action-type>
+					<config_notification_action_button1>&lt;null&gt;</config_notification_action_button1>
+					<config_notification_action_button1-type>java.lang.String</config_notification_action_button1-type>
+					<config_notification_action_button2>&lt;null&gt;</config_notification_action_button2>
+					<config_notification_action_button2-type>java.lang.String</config_notification_action_button2-type>
+					<config_notification_action_button3>&lt;null&gt;</config_notification_action_button3>
+					<config_notification_action_button3-type>java.lang.String</config_notification_action_button3-type>
+					<config_notification_action_button4>&lt;null&gt;</config_notification_action_button4>
+					<config_notification_action_button4-type>java.lang.String</config_notification_action_button4-type>
+					<config_notification_action_button5>&lt;null&gt;</config_notification_action_button5>
+					<config_notification_action_button5-type>java.lang.String</config_notification_action_button5-type>
+					<config_notification_action_label1>&lt;null&gt;</config_notification_action_label1>
+					<config_notification_action_label1-type>java.lang.String</config_notification_action_label1-type>
+					<config_notification_action_label2>&lt;null&gt;</config_notification_action_label2>
+					<config_notification_action_label2-type>java.lang.String</config_notification_action_label2-type>
+					<config_notification_action_label3>&lt;null&gt;</config_notification_action_label3>
+					<config_notification_action_label3-type>java.lang.String</config_notification_action_label3-type>
+					<config_notification_action_on_dismiss>&lt;null&gt;</config_notification_action_on_dismiss>
+					<config_notification_action_on_dismiss-type>java.lang.String</config_notification_action_on_dismiss-type>
+					<config_notification_action_share>false</config_notification_action_share>
+					<config_notification_action_share-type>java.lang.Boolean</config_notification_action_share-type>
+					<config_notification_command>&lt;null&gt;</config_notification_command>
+					<config_notification_command-type>java.lang.String</config_notification_command-type>
+					<config_notification_content_info>&lt;null&gt;</config_notification_content_info>
+					<config_notification_content_info-type>java.lang.String</config_notification_content_info-type>
+					<config_notification_dismiss_on_touch>false</config_notification_dismiss_on_touch>
+					<config_notification_dismiss_on_touch-type>java.lang.Boolean</config_notification_dismiss_on_touch-type>
+					<config_notification_icon>&lt;null&gt;</config_notification_icon>
+					<config_notification_icon-type>java.lang.String</config_notification_icon-type>
+					<config_notification_indeterminate_progress>false</config_notification_indeterminate_progress>
+					<config_notification_indeterminate_progress-type>java.lang.Boolean</config_notification_indeterminate_progress-type>
+					<config_notification_led_color>&lt;null&gt;</config_notification_led_color>
+					<config_notification_led_color-type>java.lang.String</config_notification_led_color-type>
+					<config_notification_led_off>&lt;null&gt;</config_notification_led_off>
+					<config_notification_led_off-type>java.lang.String</config_notification_led_off-type>
+					<config_notification_led_on>&lt;null&gt;</config_notification_led_on>
+					<config_notification_led_on-type>java.lang.String</config_notification_led_on-type>
+					<config_notification_max_progress>&lt;null&gt;</config_notification_max_progress>
+					<config_notification_max_progress-type>java.lang.String</config_notification_max_progress-type>
+					<config_notification_number>&lt;null&gt;</config_notification_number>
+					<config_notification_number-type>java.lang.String</config_notification_number-type>
+					<config_notification_persistent>true</config_notification_persistent>
+					<config_notification_persistent-type>java.lang.Boolean</config_notification_persistent-type>
+					<config_notification_picture>&lt;null&gt;</config_notification_picture>
+					<config_notification_picture-type>java.lang.String</config_notification_picture-type>
+					<config_notification_priority>2</config_notification_priority>
+					<config_notification_priority-type>java.lang.String</config_notification_priority-type>
+					<config_notification_progress>&lt;null&gt;</config_notification_progress>
+					<config_notification_progress-type>java.lang.String</config_notification_progress-type>
+					<config_notification_subtext>&lt;null&gt;</config_notification_subtext>
+					<config_notification_subtext-type>java.lang.String</config_notification_subtext-type>
+					<config_notification_text>%notif_messages</config_notification_text>
+					<config_notification_text-type>java.lang.String</config_notification_text-type>
+					<config_notification_ticker>&lt;null&gt;</config_notification_ticker>
+					<config_notification_ticker-type>java.lang.String</config_notification_ticker-type>
+					<config_notification_title>%notif_sender</config_notification_title>
+					<config_notification_title-type>java.lang.String</config_notification_title-type>
+					<config_notification_url>&lt;null&gt;</config_notification_url>
+					<config_notification_url-type>java.lang.String</config_notification_url-type>
+					<config_notification_vibration>&lt;null&gt;</config_notification_vibration>
+					<config_notification_vibration-type>java.lang.String</config_notification_vibration-type>
+					<config_status_bar_icon>reply</config_status_bar_icon>
+					<config_status_bar_icon-type>java.lang.String</config_status_bar_icon-type>
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%err
+Error Code
+Only available if you select &amp;lt;b&amp;gt;Continue Task After Error&amp;lt;/b&amp;gt; and the action ends in error&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;%errmsg
+Error Message
+Only available if you select &amp;lt;b&amp;gt;Continue Task After Error&amp;lt;/b&amp;gt; and the action ends in error&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;&lt;/StringArray&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
+					<net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>[Ljava.lang.String;</net.dinglisch.android.tasker.RELEVANT_VARIABLES-type>
+					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>NotificationChannelImportance StatusBarTextSize NotificationChannelId config_notification_title config_notification_text config_status_bar_icon config_notification_priority TextExpanded plugininstanceid plugintypeid </net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
+					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
+					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
+					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
+					<notificaitionid>&lt;null&gt;</notificaitionid>
+					<notificaitionid-type>java.lang.String</notificaitionid-type>
+					<notificaitionsound>&lt;null&gt;</notificaitionsound>
+					<notificaitionsound-type>java.lang.String</notificaitionsound-type>
+					<plugininstanceid>d84af99c-9b6d-4972-ace2-3cd324ca4e64</plugininstanceid>
+					<plugininstanceid-type>java.lang.String</plugininstanceid-type>
+					<plugintypeid>com.joaomgcd.autonotification.intent.IntentNotification</plugintypeid>
+					<plugintypeid-type>java.lang.String</plugintypeid-type>
+				</Vals>
+			</Bundle>
+			<Str sr="arg1" ve="3">com.joaomgcd.autonotification</Str>
+			<Str sr="arg2" ve="3">com.joaomgcd.autonotification.activity.ActivityConfigNotify</Str>
+			<Int sr="arg3" val="45"/>
+			<Int sr="arg4" val="1"/>
+		</Action>
 	</Task>
 </TaskerData>
